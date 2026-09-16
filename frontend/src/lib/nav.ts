@@ -30,21 +30,24 @@ export interface NavItem {
 
 const ALL: Role[] = ["SUPERADMIN", "ADMIN", "TEACHER", "STUDENT", "PARENT"]
 const STAFF: Role[] = ["SUPERADMIN", "ADMIN"]
+// SUPERADMIN is deliberately excluded from attendance, homework, quizzes and the
+// standalone classes browser — it's an oversight role, not an operational one.
+const NOT_SUPERADMIN: Role[] = ["ADMIN", "TEACHER", "STUDENT", "PARENT"]
 
 export const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Bosh sahifa", icon: LayoutGrid, roles: ALL, section: "Umumiy" },
   { to: "/schedule", label: "Dars jadvali", icon: CalendarDays, roles: ALL, section: "Umumiy" },
   { to: "/grades", label: "Baholar", icon: GraduationCap, roles: ALL, section: "Umumiy" },
-  { to: "/attendance", label: "Davomat", icon: ClipboardCheck, roles: ALL, section: "Umumiy" },
-  { to: "/homework", label: "Uy vazifalari", icon: ListChecks, roles: ALL, section: "Umumiy" },
-  { to: "/quizzes", label: "Testlar", icon: BookOpen, roles: ALL, section: "Umumiy" },
+  { to: "/attendance", label: "Davomat", icon: ClipboardCheck, roles: NOT_SUPERADMIN, section: "Umumiy" },
+  { to: "/homework", label: "Uy vazifalari", icon: ListChecks, roles: NOT_SUPERADMIN, section: "Umumiy" },
+  { to: "/quizzes", label: "Testlar", icon: BookOpen, roles: NOT_SUPERADMIN, section: "Umumiy" },
   { to: "/library", label: "Kutubxona", icon: LibraryBig, roles: ALL, section: "Umumiy" },
   { to: "/ai", label: "AI Yordamchi", icon: Bot, roles: ["STUDENT"], section: "Umumiy" },
 
   { to: "/students", label: "O'quvchilar", icon: Users, roles: [...STAFF, "TEACHER", "PARENT"], section: "Boshqaruv" },
   { to: "/teachers", label: "O'qituvchilar", icon: UsersRound, roles: STAFF, section: "Boshqaruv" },
   { to: "/parents", label: "Ota-onalar", icon: UsersRound, roles: STAFF, section: "Boshqaruv" },
-  { to: "/classes", label: "Sinflar", icon: School, roles: ALL, section: "Boshqaruv" },
+  { to: "/classes", label: "Sinflar", icon: School, roles: NOT_SUPERADMIN, section: "Boshqaruv" },
   { to: "/subjects", label: "Fanlar", icon: BookOpen, roles: ALL, section: "Boshqaruv" },
   { to: "/analytics", label: "Statistika", icon: LineChart, roles: STAFF, section: "Boshqaruv" },
 

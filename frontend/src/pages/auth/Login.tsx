@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   GraduationCap,
+  Heart,
   Lock,
   MessagesSquare,
   ShieldCheck,
@@ -17,6 +18,8 @@ import { api, getErrorMessage } from "../../lib/api"
 import { useAuthStore } from "../../store/auth"
 import { Button } from "../../components/ui/Button"
 import { Input } from "../../components/ui/Input"
+import { ContactInfo } from "../../components/shared/ContactInfo"
+import { FloatingBooks } from "../../components/shared/FloatingBooks"
 
 const FEATURES = [
   { icon: BarChart3, title: "Real vaqtda statistika", desc: "Davomat, baho va progressni bir joydan kuzating" },
@@ -54,64 +57,95 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-ink-50 dark:bg-ink-950">
-      {/* Left — branding */}
-      <div className="relative hidden w-1/2 overflow-hidden bg-ink-950 lg:flex lg:flex-col lg:justify-between lg:p-12">
+    <div className="flex h-screen overflow-hidden bg-ink-50 dark:bg-ink-950">
+      {/* Left — branding (scrolls independently so the form on the right always stays put) */}
+      <div className="relative hidden h-full w-1/2 overflow-y-auto overflow-x-hidden bg-ink-950 lg:block">
         <div className="bg-mesh absolute inset-0" />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-ink-950/40 to-ink-950" />
+        <FloatingBooks />
 
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="relative flex items-center gap-2.5"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-soft">
-            <GraduationCap className="h-6 w-6 text-white" />
-          </div>
-          <span className="font-display text-xl font-bold text-white">MaktabIQ</span>
-        </motion.div>
-
-        <div className="relative space-y-8">
-          <motion.h1
-            initial={{ opacity: 0, y: 16 }}
+        <div className="relative flex min-h-full flex-col gap-10 p-12">
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="font-display text-4xl font-bold leading-tight text-white"
+            transition={{ duration: 0.5 }}
+            className="flex items-center gap-2.5"
           >
-            Maktabingizni <br /> yagona raqamli <br />
-            <span className="bg-gradient-to-r from-brand-300 to-accent-300 bg-clip-text text-transparent">
-              platformaga
-            </span>{" "}
-            aylantiring
-          </motion.h1>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 shadow-soft">
+              <GraduationCap className="h-6 w-6 text-white" />
+            </div>
+            <span className="font-display text-xl font-bold text-white">MaktabIQ</span>
+          </motion.div>
 
-          <div className="space-y-4">
-            {FEATURES.map((f, i) => (
-              <motion.div
-                key={f.title}
-                initial={{ opacity: 0, x: -16 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: 0.2 + i * 0.1 }}
-                className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-brand-300">
-                  <f.icon className="h-4.5 w-4.5" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-white">{f.title}</p>
-                  <p className="text-xs text-ink-300">{f.desc}</p>
-                </div>
-              </motion.div>
-            ))}
+          <div className="space-y-8">
+            <motion.h1
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="font-display text-4xl font-bold leading-tight text-white"
+            >
+              Maktabingizni <br /> yagona raqamli <br />
+              <span className="bg-gradient-to-r from-brand-300 to-accent-300 bg-clip-text text-transparent">
+                platformaga
+              </span>{" "}
+              aylantiring
+            </motion.h1>
+
+            <div className="space-y-4">
+              {FEATURES.map((f, i) => (
+                <motion.div
+                  key={f.title}
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.4, delay: 0.2 + i * 0.1 }}
+                  className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm"
+                >
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 text-brand-300">
+                    <f.icon className="h-4.5 w-4.5" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{f.title}</p>
+                    <p className="text-xs text-ink-300">{f.desc}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <p className="relative text-xs text-ink-400">© {new Date().getFullYear()} MaktabIQ. Barcha huquqlar himoyalangan.</p>
+          {/* Biz haqimizda */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.5 }}
+            className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm"
+          >
+            <motion.div
+              animate={{ rotate: [0, 8, -8, 0], scale: [1, 1.08, 1] }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+              className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-accent-400 to-accent-600 text-white shadow-soft"
+            >
+              <Heart className="h-5 w-5" />
+            </motion.div>
+            <h2 className="font-display text-lg font-bold text-white">Biz haqimizda</h2>
+            <p className="mt-2 text-sm leading-relaxed text-ink-300">
+              MaktabIQ — zamonaviy maktablar uchun yaratilgan yagona raqamli ta'lim boshqaruv tizimi.
+              Maqsadimiz — o'quvchi, o'qituvchi va ota-onalarni bitta qulay platformada birlashtirib,
+              o'quv jarayonini shaffof, tezkor va zamonaviy qilish.
+            </p>
+
+            <div className="mt-5 border-t border-white/10 pt-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-ink-400">Biz bilan bog'laning</p>
+              <ContactInfo variant="dark" />
+            </div>
+          </motion.div>
+
+          <p className="text-xs text-ink-500">© {new Date().getFullYear()} MaktabIQ. Barcha huquqlar himoyalangan.</p>
+        </div>
       </div>
 
       {/* Right — form */}
-      <div className="flex w-full flex-col items-center justify-center px-6 py-12 lg:w-1/2">
+      <div className="flex h-full w-full flex-col items-center justify-center overflow-y-auto px-6 py-12 lg:w-1/2">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}

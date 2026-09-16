@@ -1,8 +1,7 @@
 from rest_framework import permissions, viewsets
 
-from common.permissions import IsAdminOrTeacher
-
 from .models import LibraryMaterial
+from .permissions import CanManageLibrary
 from .serializers import LibraryMaterialSerializer
 
 
@@ -14,7 +13,7 @@ class LibraryMaterialViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.request.method not in permissions.SAFE_METHODS:
-            return [IsAdminOrTeacher()]
+            return [CanManageLibrary()]
         return [permissions.IsAuthenticated()]
 
     def perform_create(self, serializer):

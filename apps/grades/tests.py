@@ -86,6 +86,27 @@ class GradePermissionTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_superadmin_can_view_but_not_create_grade(self):
+        superadmin = User.objects.create_user(
+            username="superadmin1", password="Str0ngPass!23", role=User.Role.SUPERADMIN
+        )
+        self.client.force_authenticate(superadmin)
+
+        list_response = self.client.get("/api/v1/grades/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+
+        create_response = self.client.post(
+            "/api/v1/grades/",
+            {
+                "student": self.student1.id,
+                "subject": self.subject.id,
+                "academic_year": self.academic_year.id,
+                "quarter": self.quarter1.id,
+                "value": 9,
+            },
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_annual_average_calculation(self):
         Quarter.objects.filter(academic_year=self.academic_year).delete()
         q1 = Quarter.objects.create(

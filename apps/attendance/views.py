@@ -7,10 +7,10 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from common.audit import log_action
-from common.permissions import IsAdmin, user_role
+from common.permissions import user_role
 
 from .models import Attendance, AttendanceStatus, TeacherAttendance
-from .permissions import CanManageAttendance, CanSubmitParentReason
+from .permissions import CanAccessTeacherAttendance, CanManageAttendance, CanSubmitParentReason
 from .serializers import AttendanceSerializer, ParentReasonSerializer, TeacherAttendanceSerializer
 
 
@@ -34,7 +34,7 @@ class AttendanceViewSet(viewsets.ModelViewSet):
         role = user_role(self.request.user)
         user = self.request.user
 
-        if role in {"ADMIN", "SUPERADMIN"}:
+        if role == "ADMIN":
             return qs
         if role == "TEACHER":
             return (qs.filter(marked_by__user=user) | qs.filter(class_room__curator__user=user)).distinct()
@@ -103,18 +103,42 @@ class AttendanceViewSet(viewsets.ModelViewSet):
 
 class TeacherAttendanceViewSet(viewsets.ModelViewSet):
     serializer_class = TeacherAttendanceSerializer
+    permission_classes = [CanAccessTeacherAttendance]
     filterset_fields = ["teacher", "date", "status"]
 
     def get_queryset(self):
         qs = TeacherAttendance.objects.select_related("teacher__user")
         role = user_role(self.request.user)
-        if role in {"ADMIN", "SUPERADMIN"}:
+        if role == "ADMIN":
             return qs
         if role == "TEACHER":
             return qs.filter(teacher__user=self.request.user)
         return qs.none()
 
-    def get_permissions(self):
-        if self.request.method not in permissions.SAFE_METHODS:
-            return [IsAdmin()]
-        return [permissions.IsAuthenticated()]
+    def _notify_if_absent(self, attendance):
+        if attendance.status == AttendanceStatus.ABSENT:
+            from apps.notifications.tasks import notify_teacher_absence
+
+            notify_teacher_absence.delay(attendance.id)
+
+    def perform_create(self, serializer):
+        attendance = serializer.save()
+        log_action(
+            self.request.user,
+            "TEACHER_ATTENDANCE_MARKED",
+            target=str(attendance.teacher),
+            description=f"{attendance.date}: {attendance.status}",
+            request=self.request,
+        )
+        self._notify_if_absent(attendance)
+
+    def perform_update(self, serializer):
+        attendance = serializer.save()
+        log_action(
+            self.request.user,
+            "TEACHER_ATTENDANCE_CHANGED",
+            target=str(attendance.teacher),
+            description=f"{attendance.date}: {attendance.status}",
+            request=self.request,
+        )
+        self._notify_if_absent(attendance)

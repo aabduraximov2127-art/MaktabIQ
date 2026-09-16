@@ -28,8 +28,10 @@ import AIAssistantPage from "./pages/AIAssistant"
 import AnalyticsPage from "./pages/Analytics"
 import ProfilePage from "./pages/Profile"
 import NotFoundPage from "./pages/NotFound"
+import type { Role } from "./types"
 
 const STAFF = ["ADMIN", "SUPERADMIN"] as const
+const NOT_SUPERADMIN: Role[] = ["ADMIN", "TEACHER", "STUDENT", "PARENT"]
 
 export default function App() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated())
@@ -53,15 +55,11 @@ export default function App() {
             <Route path="/" element={<DashboardPage />} />
             <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/grades" element={<GradesPage />} />
-            <Route path="/attendance" element={<AttendancePage />} />
-            <Route path="/homework" element={<HomeworkPage />} />
-            <Route path="/quizzes" element={<QuizzesPage />} />
             <Route path="/library" element={<LibraryPage />} />
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/announcements" element={<AnnouncementsPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/helpdesk" element={<HelpdeskPage />} />
-            <Route path="/classes" element={<ClassesPage />} />
             <Route path="/subjects" element={<SubjectsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
 
@@ -77,6 +75,16 @@ export default function App() {
               <Route path="/teachers" element={<TeachersPage />} />
               <Route path="/parents" element={<ParentsPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
+            </Route>
+
+            {/* SUPERADMIN is an oversight role: no attendance, homework, quizzes,
+                or the standalone class browser (it drills into a class from
+                inside Grades instead). */}
+            <Route element={<RoleGuard roles={NOT_SUPERADMIN} />}>
+              <Route path="/attendance" element={<AttendancePage />} />
+              <Route path="/homework" element={<HomeworkPage />} />
+              <Route path="/quizzes" element={<QuizzesPage />} />
+              <Route path="/classes" element={<ClassesPage />} />
             </Route>
 
             <Route path="*" element={<NotFoundPage />} />

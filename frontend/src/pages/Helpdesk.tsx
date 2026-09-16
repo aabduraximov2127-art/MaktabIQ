@@ -1,17 +1,19 @@
 import { type FormEvent, useState } from "react"
-import { Plus } from "lucide-react"
+import { Headset, Plus } from "lucide-react"
 import toast from "react-hot-toast"
 import { useFetch } from "../hooks/useFetch"
 import { api, getErrorMessage } from "../lib/api"
 import { useAuthStore } from "../store/auth"
 import { PageHeader } from "../components/ui/PageHeader"
 import { Button } from "../components/ui/Button"
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
 import { Field, Input } from "../components/ui/Input"
 import { Select } from "../components/ui/Select"
 import { Modal } from "../components/ui/Modal"
 import { Drawer } from "../components/ui/Drawer"
 import { Badge } from "../components/ui/Badge"
 import { DataTable, type Column } from "../components/ui/Table"
+import { ContactInfo } from "../components/shared/ContactInfo"
 import { formatDate } from "../lib/format"
 import type { HelpDeskTicket, Paginated } from "../types"
 
@@ -58,6 +60,18 @@ export default function HelpdeskPage() {
           </Button>
         }
       />
+
+      <Card className="mb-5">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Headset className="h-4 w-4 text-brand-500" />
+            <CardTitle>Tezkor yordam kerakmi?</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <ContactInfo variant="light" />
+        </CardContent>
+      </Card>
 
       <DataTable
         columns={columns}

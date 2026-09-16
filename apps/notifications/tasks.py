@@ -46,6 +46,20 @@ def notify_student_absence(attendance_id):
 
 
 @shared_task
+def notify_teacher_absence(attendance_id):
+    from apps.attendance.models import TeacherAttendance
+
+    try:
+        attendance = TeacherAttendance.objects.select_related("teacher__user").get(pk=attendance_id)
+    except TeacherAttendance.DoesNotExist:
+        return
+
+    title = "Davomat: kelmagansiz"
+    message = f"Nega bugun ({attendance.date}) ishda emassiz? Iltimos, ma'muriyat bilan bog'laning."
+    _deliver(attendance.teacher.user, title, message, NotificationType.ABSENT)
+
+
+@shared_task
 def notify_new_grade(grade_id):
     from apps.grades.models import Grade
 

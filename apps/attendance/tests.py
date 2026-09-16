@@ -86,3 +86,50 @@ class AttendancePermissionTests(APITestCase):
             {"student": self.student2.id, "class_room": self.class_a.id, "date": "2026-09-16", "status": "PRESENT"},
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_superadmin_has_no_attendance_access(self):
+        superadmin = User.objects.create_user(
+            username="superadmin1", password="Str0ngPass!23", role=User.Role.SUPERADMIN
+        )
+        self.client.force_authenticate(superadmin)
+
+        list_response = self.client.get("/api/v1/attendance/")
+        self.assertEqual(list_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        create_response = self.client.post(
+            "/api/v1/attendance/",
+            {"student": self.student1.id, "class_room": self.class_a.id, "date": "2026-09-17", "status": "PRESENT"},
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+
+        teacher_attendance_response = self.client.get("/api/v1/attendance/teacher-attendance/")
+        self.assertEqual(teacher_attendance_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_teacher_cannot_mark_own_attendance_only_admin_can(self):
+        admin = User.objects.create_user(username="admin1", password="Str0ngPass!23", role=User.Role.ADMIN)
+
+        self.client.force_authenticate(self.teacher_user)
+        response = self.client.post(
+            "/api/v1/attendance/teacher-attendance/",
+            {"teacher": self.teacher.id, "date": "2026-09-17", "status": "PRESENT"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(admin)
+        response = self.client.post(
+            "/api/v1/attendance/teacher-attendance/",
+            {"teacher": self.teacher.id, "date": "2026-09-17", "status": "ABSENT"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_teacher_absence_triggers_notification(self):
+        from apps.notifications.models import Notification
+
+        admin = User.objects.create_user(username="admin2", password="Str0ngPass!23", role=User.Role.ADMIN)
+        self.client.force_authenticate(admin)
+        response = self.client.post(
+            "/api/v1/attendance/teacher-attendance/",
+            {"teacher": self.teacher.id, "date": "2026-09-18", "status": "ABSENT"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(Notification.objects.filter(user=self.teacher_user).exists())

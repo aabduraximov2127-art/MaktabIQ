@@ -26,7 +26,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         role = user_role(self.request.user)
         user = self.request.user
 
-        if role in {"ADMIN", "SUPERADMIN"}:
+        if role == "ADMIN":
             return qs
         if role == "TEACHER":
             return qs.filter(teacher__user=user)
@@ -69,6 +69,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
 
 class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = AssignmentSubmissionSerializer
+    permission_classes = [CanManageAssignment]
     filterset_fields = ["assignment", "student", "status"]
 
     def get_queryset(self):
@@ -76,7 +77,7 @@ class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
         role = user_role(self.request.user)
         user = self.request.user
 
-        if role in {"ADMIN", "SUPERADMIN"}:
+        if role == "ADMIN":
             return qs
         if role == "TEACHER":
             return qs.filter(assignment__teacher__user=user)
@@ -90,7 +91,7 @@ class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
     def grade(self, request, pk=None):
         submission = get_object_or_404(AssignmentSubmission, pk=pk)
         role = user_role(request.user)
-        if role not in {"ADMIN", "SUPERADMIN"} and submission.assignment.teacher.user_id != request.user.id:
+        if role != "ADMIN" and submission.assignment.teacher.user_id != request.user.id:
             self.permission_denied(request)
 
         serializer = SubmissionGradeSerializer(data=request.data)

@@ -28,3 +28,18 @@ class LibraryMaterialAPITests(APITestCase):
             "/api/v1/library/", {"title": "Yangi kitob", "material_type": "BOOK"}
         )
         self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_superadmin_can_view_but_not_upload(self):
+        LibraryMaterial.objects.create(title="Tarix kitobi", material_type="BOOK")
+        superadmin = User.objects.create_user(
+            username="superadmin1", password="Str0ngPass!23", role=User.Role.SUPERADMIN
+        )
+        self.client.force_authenticate(superadmin)
+
+        list_response = self.client.get("/api/v1/library/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+
+        create_response = self.client.post(
+            "/api/v1/library/", {"title": "Yangi kitob", "material_type": "BOOK"}
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)

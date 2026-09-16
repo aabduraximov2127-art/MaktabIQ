@@ -26,7 +26,8 @@ const TYPE_META: Record<LibraryMaterial["material_type"], { label: string; icon:
 
 export default function LibraryPage() {
   const user = useAuthStore((s) => s.user)
-  const canManage = user?.role === "TEACHER" || user?.role === "ADMIN" || user?.role === "SUPERADMIN"
+  // SUPERADMIN can only browse the library, never upload — that's ADMIN/TEACHER's job.
+  const canManage = user?.role === "TEACHER" || user?.role === "ADMIN"
   const [typeFilter, setTypeFilter] = useState("")
   const [addOpen, setAddOpen] = useState(false)
 

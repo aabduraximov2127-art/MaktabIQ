@@ -66,3 +66,11 @@ class QuizScoringTests(APITestCase):
         self.client.force_authenticate(self.teacher_user)
         response = self.client.get(f"/api/v1/quizzes/{self.quiz.id}/")
         self.assertIn("correct_answer", response.data["questions"][0])
+
+    def test_superadmin_cannot_see_quizzes(self):
+        superadmin = User.objects.create_user(
+            username="superadmin1", password="Str0ngPass!23", role=User.Role.SUPERADMIN
+        )
+        self.client.force_authenticate(superadmin)
+        response = self.client.get("/api/v1/quizzes/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

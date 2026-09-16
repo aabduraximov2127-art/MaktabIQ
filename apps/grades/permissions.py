@@ -4,10 +4,13 @@ from common.permissions import user_role
 
 
 class CanManageGrade(BasePermission):
+    """SUPERADMIN can only look at grades (via the class -> student -> subject
+    drill-down) — never create/edit them. That stays with ADMIN/TEACHER."""
+
     def has_permission(self, request, view):
         if request.method in SAFE_METHODS:
             return True
-        return user_role(request.user) in {"ADMIN", "SUPERADMIN", "TEACHER"}
+        return user_role(request.user) in {"ADMIN", "TEACHER"}
 
     def has_object_permission(self, request, view, obj):
         role = user_role(request.user)

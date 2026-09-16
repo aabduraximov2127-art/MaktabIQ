@@ -4,14 +4,20 @@ from common.permissions import user_role
 
 
 class CanManageAssignment(BasePermission):
+    """SUPERADMIN doesn't need homework at all — it's an ADMIN/TEACHER/STUDENT/
+    PARENT concern."""
+
     def has_permission(self, request, view):
+        role = user_role(request.user)
+        if role == "SUPERADMIN":
+            return False
         if request.method in SAFE_METHODS:
             return True
-        return user_role(request.user) in {"ADMIN", "SUPERADMIN", "TEACHER"}
+        return role in {"ADMIN", "TEACHER"}
 
     def has_object_permission(self, request, view, obj):
         role = user_role(request.user)
-        if role in {"ADMIN", "SUPERADMIN"}:
+        if role == "ADMIN":
             return True
         if request.method in SAFE_METHODS:
             return True

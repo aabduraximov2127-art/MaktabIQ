@@ -4,9 +4,10 @@ from rest_framework import permissions, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from common.permissions import IsAdminOrTeacher, IsStudent, user_role
+from common.permissions import IsStudent, user_role
 
 from .models import Question, Quiz, QuizAttempt
+from .permissions import CanAccessQuiz
 from .serializers import (
     QuestionSerializer,
     QuizAttemptSerializer,
@@ -17,6 +18,7 @@ from .serializers import (
 
 class QuizViewSet(viewsets.ModelViewSet):
     serializer_class = QuizSerializer
+    permission_classes = [CanAccessQuiz]
     filterset_fields = ["subject", "class_room", "teacher"]
 
     def get_queryset(self):
@@ -24,7 +26,7 @@ class QuizViewSet(viewsets.ModelViewSet):
         role = user_role(self.request.user)
         user = self.request.user
 
-        if role in {"ADMIN", "SUPERADMIN"}:
+        if role == "ADMIN":
             return qs
         if role == "TEACHER":
             return qs.filter(teacher__user=user)
@@ -37,9 +39,7 @@ class QuizViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action == "submit":
             return [permissions.IsAuthenticated(), IsStudent()]
-        if self.request.method not in permissions.SAFE_METHODS:
-            return [IsAdminOrTeacher()]
-        return [permissions.IsAuthenticated()]
+        return super().get_permissions()
 
     def perform_create(self, serializer):
         teacher_profile = getattr(self.request.user, "teacher_profile", None)
@@ -80,12 +80,13 @@ class QuizViewSet(viewsets.ModelViewSet):
 class QuestionViewSet(viewsets.ModelViewSet):
     queryset = Question.objects.select_related("quiz")
     serializer_class = QuestionSerializer
-    permission_classes = [IsAdminOrTeacher]
+    permission_classes = [CanAccessQuiz]
     filterset_fields = ["quiz"]
 
 
 class QuizAttemptViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = QuizAttemptSerializer
+    permission_classes = [CanAccessQuiz]
     filterset_fields = ["quiz", "student"]
 
     def get_queryset(self):
@@ -93,7 +94,7 @@ class QuizAttemptViewSet(viewsets.ReadOnlyModelViewSet):
         role = user_role(self.request.user)
         user = self.request.user
 
-        if role in {"ADMIN", "SUPERADMIN"}:
+        if role == "ADMIN":
             return qs
         if role == "TEACHER":
             return qs.filter(quiz__teacher__user=user)
