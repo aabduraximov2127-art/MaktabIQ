@@ -86,6 +86,26 @@ class GradePermissionTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_student_cannot_update_own_grade(self):
+        self.client.force_authenticate(self.student1_user)
+        response = self.client.patch(f"/api/v1/grades/{self.grade1.id}/", {"value": 10})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.grade1.refresh_from_db()
+        self.assertEqual(self.grade1.value, 8)
+
+    def test_student_cannot_delete_own_grade(self):
+        self.client.force_authenticate(self.student1_user)
+        response = self.client.delete(f"/api/v1/grades/{self.grade1.id}/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_student_cannot_fetch_other_students_annual_grades(self):
+        self.client.force_authenticate(self.student2_user)
+        response = self.client.get(
+            f"/api/v1/grades/annual/?student={self.student1.id}&academic_year={self.academic_year.id}"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"], [])
+
     def test_superadmin_can_view_but_not_create_grade(self):
         superadmin = User.objects.create_user(
             username="superadmin1", password="Str0ngPass!23", role=User.Role.SUPERADMIN

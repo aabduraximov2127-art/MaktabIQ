@@ -87,6 +87,21 @@ class AttendancePermissionTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_student_cannot_update_own_attendance(self):
+        self.client.force_authenticate(self.student1_user)
+        response = self.client.patch(f"/api/v1/attendance/{self.attendance1.id}/", {"status": "PRESENT"})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.attendance1.refresh_from_db()
+        self.assertEqual(self.attendance1.status, AttendanceStatus.ABSENT)
+
+    def test_student_cannot_see_other_students_attendance(self):
+        self.client.force_authenticate(self.student1_user)
+        response = self.client.get("/api/v1/attendance/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        student_ids = [a["student"] for a in response.data["results"]]
+        self.assertIn(self.student1.id, student_ids)
+        self.assertNotIn(self.student2.id, student_ids)
+
     def test_superadmin_has_no_attendance_access(self):
         superadmin = User.objects.create_user(
             username="superadmin1", password="Str0ngPass!23", role=User.Role.SUPERADMIN

@@ -261,6 +261,21 @@ class TeacherViewSet(viewsets.ModelViewSet):
     search_fields = ["user__first_name", "user__last_name", "teacher_id"]
     filterset_fields = ["school", "subjects"]
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # STUDENT only sees teachers actually teaching their class (subject teachers
+        # or curator). Every other role keeps the existing unrestricted behavior.
+        if user_role(self.request.user) == "STUDENT":
+            student_profile = getattr(self.request.user, "student_profile", None)
+            class_room_id = getattr(student_profile, "class_room_id", None)
+            if class_room_id is None:
+                return qs.none()
+            return (
+                qs.filter(lessons__class_room_id=class_room_id)
+                | qs.filter(curated_classes__id=class_room_id)
+            ).distinct()
+        return qs
+
     def get_permissions(self):
         if self.request.method not in permissions.SAFE_METHODS:
             return [IsAdmin()]

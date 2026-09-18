@@ -78,3 +78,40 @@ class AssignmentSubmissionTests(APITestCase):
         self.client.force_authenticate(superadmin)
         response = self.client.get("/api/v1/assignments/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_student_does_not_see_other_classes_homework(self):
+        other_class = ClassRoom.objects.create(
+            school=self.school, name="9-B", grade=9, academic_year=self.academic_year
+        )
+        other_lesson = Lesson.objects.create(
+            class_room=other_class,
+            subject=self.subject,
+            teacher=self.teacher,
+            room="102",
+            date="2026-09-15",
+            start_time="10:00",
+            end_time="10:45",
+        )
+        other_assignment = Assignment.objects.create(
+            lesson=other_lesson, teacher=self.teacher, title="Boshqa klass uy vazifasi", deadline="2026-12-31T23:59:00Z"
+        )
+        self.client.force_authenticate(self.student_user)
+        response = self.client.get("/api/v1/assignments/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = [a["id"] for a in response.data["results"]]
+        self.assertIn(self.assignment.id, ids)
+        self.assertNotIn(other_assignment.id, ids)
+
+    def test_student_cannot_see_other_students_submission(self):
+        other_student_user = User.objects.create_user(
+            username="student2", password="Str0ngPass!23", role=User.Role.STUDENT
+        )
+        other_student = StudentProfile.objects.create(
+            user=other_student_user, school=self.school, class_room=self.class_a, student_code="S-0002"
+        )
+        other_submission = AssignmentSubmission.objects.create(
+            assignment=self.assignment, student=other_student, answer="boshqa javob"
+        )
+        self.client.force_authenticate(self.student_user)
+        response = self.client.get(f"/api/v1/submissions/{other_submission.id}/")
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
