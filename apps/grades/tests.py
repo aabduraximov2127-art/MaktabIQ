@@ -159,3 +159,99 @@ class GradePermissionTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         result = response.data["results"][0]
         self.assertEqual(result["annual_average"], 8.75)
+
+
+class SchoolAdminGradeScopingTests(APITestCase):
+    def setUp(self):
+        self.school_a = School.objects.create(name="School A")
+        self.school_b = School.objects.create(name="School B")
+        self.academic_year = AcademicYear.objects.create(
+            name="2026-2027", start_date="2026-09-01", end_date="2027-05-31", is_active=True
+        )
+        self.quarter1 = Quarter.objects.create(
+            academic_year=self.academic_year, number=1, start_date="2026-09-01", end_date="2026-10-30"
+        )
+        self.class_a = ClassRoom.objects.create(
+            school=self.school_a, name="9-A", grade=9, academic_year=self.academic_year
+        )
+        self.class_b = ClassRoom.objects.create(
+            school=self.school_b, name="9-A", grade=9, academic_year=self.academic_year
+        )
+        self.subject = Subject.objects.create(name="Matematika")
+
+        self.admin_a = User.objects.create_user(
+            username="admin_a", password="Str0ngPass!23", role=User.Role.ADMIN, school=self.school_a
+        )
+        self.teacher_a_user = User.objects.create_user(
+            username="teacher_a", password="Str0ngPass!23", role=User.Role.TEACHER, school=self.school_a
+        )
+        self.teacher_a = TeacherProfile.objects.create(
+            user=self.teacher_a_user, school=self.school_a, teacher_id="TA-0001"
+        )
+
+        self.student_a_user = User.objects.create_user(
+            username="student_a", password="Str0ngPass!23", role=User.Role.STUDENT, school=self.school_a
+        )
+        self.student_a = StudentProfile.objects.create(
+            user=self.student_a_user, school=self.school_a, class_room=self.class_a, student_code="A-0001"
+        )
+        self.student_b_user = User.objects.create_user(
+            username="student_b", password="Str0ngPass!23", role=User.Role.STUDENT, school=self.school_b
+        )
+        self.student_b = StudentProfile.objects.create(
+            user=self.student_b_user, school=self.school_b, class_room=self.class_b, student_code="B-0001"
+        )
+
+        self.grade_a = Grade.objects.create(
+            student=self.student_a,
+            subject=self.subject,
+            teacher=self.teacher_a,
+            academic_year=self.academic_year,
+            quarter=self.quarter1,
+            value=8,
+        )
+        self.grade_b = Grade.objects.create(
+            student=self.student_b,
+            subject=self.subject,
+            academic_year=self.academic_year,
+            quarter=self.quarter1,
+            value=7,
+        )
+
+    def test_admin_sees_only_own_school_grades(self):
+        self.client.force_authenticate(self.admin_a)
+        response = self.client.get("/api/v1/grades/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        student_ids = [g["student"] for g in response.data["results"]]
+        self.assertIn(self.student_a.id, student_ids)
+        self.assertNotIn(self.student_b.id, student_ids)
+
+    def test_admin_cannot_view_other_school_grade(self):
+        # Cross-school access is excluded at the queryset level, so DRF's default
+        # get_object() 404s before ever reaching object-level permission checks —
+        # an acceptable "denied" per the school-object-security spec (403 or 404).
+        self.client.force_authenticate(self.admin_a)
+        response = self.client.get(f"/api/v1/grades/{self.grade_b.id}/")
+        self.assertIn(response.status_code, (status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND))
+
+    def test_admin_cannot_create_grade_for_other_school_student(self):
+        self.client.force_authenticate(self.admin_a)
+        response = self.client.post(
+            "/api/v1/grades/",
+            {
+                "student": self.student_b.id,
+                "subject": self.subject.id,
+                "academic_year": self.academic_year.id,
+                "quarter": self.quarter1.id,
+                "value": 9,
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_override_own_school_grade_with_audit_log(self):
+        from common.models import AuditLog
+
+        self.client.force_authenticate(self.admin_a)
+        response = self.client.patch(f"/api/v1/grades/{self.grade_a.id}/", {"value": 10})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(AuditLog.objects.filter(action="GRADE_OVERRIDE", actor=self.admin_a).exists())

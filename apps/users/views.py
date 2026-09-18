@@ -8,6 +8,8 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
+from rest_framework.exceptions import PermissionDenied
+
 from common.audit import get_client_ip, log_action
 from common.permissions import IsAdmin, IsAdminOrTeacher, IsStaff, user_role
 
@@ -90,6 +92,17 @@ class RegisterStudentView(generics.CreateAPIView):
     permission_classes = [IsAdminOrTeacher]
 
     def perform_create(self, serializer):
+        requester = self.request.user
+        if user_role(requester) == "ADMIN":
+            # School Admin/Director may only ever create students inside their own
+            # school — TEACHER's create flow (business logic unchanged) skips this.
+            school = serializer.validated_data.get("school")
+            if school is not None and school.id != requester.school_id:
+                raise PermissionDenied("Boshqa maktab uchun student yarata olmaysiz.")
+            class_room = serializer.validated_data.get("class_room")
+            if class_room is not None and class_room.school_id != requester.school_id:
+                raise PermissionDenied("Boshqa maktabning classiga student biriktira olmaysiz.")
+            serializer.validated_data["school"] = requester.school
         user = serializer.save()
         log_action(
             self.request.user,
@@ -100,12 +113,19 @@ class RegisterStudentView(generics.CreateAPIView):
         )
 
 
+def _deny_cross_school(request, target_user):
+    """ADMIN may only manage accounts in their own school; SUPERADMIN is unrestricted."""
+    if user_role(request.user) == "ADMIN" and target_user.school_id != request.user.school_id:
+        raise PermissionDenied("Boshqa maktab foydalanuvchisini boshqara olmaysiz.")
+
+
 class AccountActivateView(APIView):
     permission_classes = [IsAdmin]
     serializer_class = EmptySerializer
 
     def post(self, request, pk):
         user = get_object_or_404(User, pk=pk)
+        _deny_cross_school(request, user)
         user.is_active = True
         user.is_deactivated = False
         user.save(update_fields=["is_active", "is_deactivated"])
@@ -119,6 +139,7 @@ class AccountDeactivateView(APIView):
 
     def post(self, request, pk):
         user = get_object_or_404(User, pk=pk)
+        _deny_cross_school(request, user)
         user.is_active = False
         user.is_deactivated = True
         user.save(update_fields=["is_active", "is_deactivated"])
@@ -134,6 +155,7 @@ class PasswordResetView(APIView):
 
     def post(self, request, pk):
         user = get_object_or_404(User, pk=pk)
+        _deny_cross_school(request, user)
         serializer = PasswordResetSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user.set_password(serializer.validated_data["new_password"])
@@ -169,11 +191,16 @@ class TelegramLinkCodeView(APIView):
 
 
 class UserViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = User.objects.all().order_by("-date_joined")
     serializer_class = UserSerializer
     permission_classes = [IsAdmin]
     search_fields = ["username", "first_name", "last_name", "email"]
     filterset_fields = ["role", "school", "is_active"]
+
+    def get_queryset(self):
+        qs = User.objects.all().order_by("-date_joined")
+        if user_role(self.request.user) == "ADMIN":
+            return qs.filter(school=self.request.user.school)
+        return qs
 
 
 class StudentViewSet(viewsets.ModelViewSet):
@@ -197,8 +224,10 @@ class StudentViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = user_role(user)
 
-        if role in {"ADMIN", "SUPERADMIN"}:
+        if role == "SUPERADMIN":
             return qs
+        if role == "ADMIN":
+            return qs.filter(school=user.school)
         if role == "STUDENT":
             # A student may browse their own classmates (needed to start a class chat),
             # but object-level retrieve (CanAccessStudentProfile) still stays self-only.
@@ -239,6 +268,13 @@ class StudentViewSet(viewsets.ModelViewSet):
         new_class = serializer.validated_data["new_class"]
         old_class = student.class_room
 
+        if user_role(request.user) == "ADMIN":
+            # School Admin/Director may only transfer their own school's students,
+            # and only into a class that also belongs to their own school.
+            admin_school_id = request.user.school_id
+            if student.school_id != admin_school_id or new_class.school_id != admin_school_id:
+                self.permission_denied(request)
+
         student.class_room = new_class
         student.save(update_fields=["class_room"])
 
@@ -268,9 +304,10 @@ class TeacherViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
+        role = user_role(self.request.user)
         # STUDENT only sees teachers actually teaching their class (subject teachers
         # or curator). Every other role keeps the existing unrestricted behavior.
-        if user_role(self.request.user) == "STUDENT":
+        if role == "STUDENT":
             student_profile = getattr(self.request.user, "student_profile", None)
             class_room_id = getattr(student_profile, "class_room_id", None)
             if class_room_id is None:
@@ -279,6 +316,10 @@ class TeacherViewSet(viewsets.ModelViewSet):
                 qs.filter(lessons__class_room_id=class_room_id)
                 | qs.filter(curated_classes__id=class_room_id)
             ).distinct()
+        # ADMIN (School Admin/Director) is confined to their own school; SUPERADMIN,
+        # TEACHER and PARENT keep the existing unrestricted behavior.
+        if role == "ADMIN":
+            return qs.filter(school=self.request.user.school)
         return qs
 
     def get_permissions(self):
@@ -299,8 +340,10 @@ class ParentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         role = user_role(self.request.user)
-        if role in {"ADMIN", "SUPERADMIN"}:
+        if role == "SUPERADMIN":
             return super().get_queryset()
+        if role == "ADMIN":
+            return super().get_queryset().filter(user__school=self.request.user.school)
         if role == "PARENT":
             return super().get_queryset().filter(user=self.request.user)
         return ParentProfile.objects.none()

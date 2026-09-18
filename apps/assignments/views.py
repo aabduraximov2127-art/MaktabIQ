@@ -7,6 +7,12 @@ from rest_framework.response import Response
 from common.audit import log_action
 from common.permissions import IsStudent, user_role
 
+
+def _same_school_or_denied(request, view, school_id):
+    role = user_role(request.user)
+    if role == "ADMIN" and (not request.user.school_id or request.user.school_id != school_id):
+        view.permission_denied(request)
+
 from .models import Assignment, AssignmentSubmission
 from .permissions import CanManageAssignment
 from .serializers import (
@@ -27,7 +33,7 @@ class AssignmentViewSet(viewsets.ModelViewSet):
         user = self.request.user
 
         if role == "ADMIN":
-            return qs
+            return qs.filter(lesson__class_room__school=user.school)
         if role == "TEACHER":
             return qs.filter(teacher__user=user)
         if role == "STUDENT":
@@ -78,7 +84,7 @@ class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
         user = self.request.user
 
         if role == "ADMIN":
-            return qs
+            return qs.filter(assignment__lesson__class_room__school=user.school)
         if role == "TEACHER":
             return qs.filter(assignment__teacher__user=user)
         if role == "STUDENT":
@@ -91,7 +97,9 @@ class AssignmentSubmissionViewSet(viewsets.ReadOnlyModelViewSet):
     def grade(self, request, pk=None):
         submission = get_object_or_404(AssignmentSubmission, pk=pk)
         role = user_role(request.user)
-        if role != "ADMIN" and submission.assignment.teacher.user_id != request.user.id:
+        if role == "ADMIN":
+            _same_school_or_denied(request, self, submission.assignment.lesson.class_room.school_id)
+        elif submission.assignment.teacher.user_id != request.user.id:
             self.permission_denied(request)
 
         serializer = SubmissionGradeSerializer(data=request.data)

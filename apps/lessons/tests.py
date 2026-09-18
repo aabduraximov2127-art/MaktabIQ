@@ -23,7 +23,9 @@ class LessonConflictTests(APITestCase):
         )
         self.subject = Subject.objects.create(name="Matematika")
 
-        self.admin = User.objects.create_user(username="admin", password="Str0ngPass!23", role=User.Role.ADMIN)
+        self.admin = User.objects.create_user(
+            username="admin", password="Str0ngPass!23", role=User.Role.ADMIN, school=self.school
+        )
 
         self.teacher_user = User.objects.create_user(
             username="teacher1", password="Str0ngPass!23", role=User.Role.TEACHER

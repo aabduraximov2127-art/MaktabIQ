@@ -84,8 +84,14 @@ class MessageViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         role = user_role(self.request.user)
-        if role in {"ADMIN", "SUPERADMIN"}:
+        if role == "SUPERADMIN":
             return Message.objects.select_related("sender", "chat_room")
+        if role == "ADMIN":
+            # Moderation view: messages in any chat that has at least one member
+            # from the Admin/Director's own school.
+            return Message.objects.filter(
+                chat_room__members__user__school=self.request.user.school
+            ).distinct().select_related("sender", "chat_room")
         return Message.objects.filter(chat_room__members__user=self.request.user).select_related(
             "sender", "chat_room"
         )

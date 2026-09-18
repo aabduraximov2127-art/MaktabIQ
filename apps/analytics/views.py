@@ -47,7 +47,12 @@ class AdminAnalyticsView(APIView):
     serializer_class = AdminAnalyticsResponseSerializer
 
     def get(self, request):
-        school_id = request.query_params.get("school") or getattr(request.user, "school_id", None)
+        if user_role(request.user) == "ADMIN":
+            # School Admin/Director statistics are always their own school's —
+            # the ?school= override is a SUPERADMIN-only capability.
+            school_id = getattr(request.user, "school_id", None)
+        else:
+            school_id = request.query_params.get("school") or getattr(request.user, "school_id", None)
         school = None
         if school_id:
             from apps.schools.models import School

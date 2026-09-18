@@ -23,16 +23,27 @@ class CanViewSensitiveStudentData(BasePermission):
         return request.user.is_staff and request.user.has_perm("users.view_sensitive_student_data")
 
 
+def same_school(user, obj_school_id):
+    """ADMIN is confined to their own school; SUPERADMIN stays global/unrestricted.
+    Any other role reaching this helper is a bug in the caller, so it defaults closed."""
+    role = user_role(user)
+    if role == "SUPERADMIN":
+        return True
+    if role == "ADMIN":
+        return bool(user.school_id) and user.school_id == obj_school_id
+    return False
+
+
 class CanAccessStudentProfile(BasePermission):
     """Student: self only. Parent: own children only. Teacher: own class students.
-    Admin/Superadmin: everyone."""
+    Superadmin: everyone. Admin: everyone in their own school only."""
 
     def has_object_permission(self, request, view, obj):
         user = request.user
         role = user_role(user)
 
         if role in {"ADMIN", "SUPERADMIN"}:
-            return True
+            return same_school(user, obj.school_id)
 
         if role == "STUDENT":
             return obj.user_id == user.id
