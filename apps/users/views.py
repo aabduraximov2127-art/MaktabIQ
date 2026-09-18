@@ -200,6 +200,11 @@ class StudentViewSet(viewsets.ModelViewSet):
         if role in {"ADMIN", "SUPERADMIN"}:
             return qs
         if role == "STUDENT":
+            # A student may browse their own classmates (needed to start a class chat),
+            # but object-level retrieve (CanAccessStudentProfile) still stays self-only.
+            class_room_id = getattr(getattr(user, "student_profile", None), "class_room_id", None)
+            if class_room_id:
+                return qs.filter(class_room_id=class_room_id)
             return qs.filter(user=user)
         if role == "PARENT":
             return qs.filter(parent_links__parent__user=user).distinct()

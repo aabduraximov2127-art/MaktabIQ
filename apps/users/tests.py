@@ -45,6 +45,29 @@ class StudentAccessPermissionTests(APITestCase):
         self.parent_profile = ParentProfile.objects.create(user=self.parent_user)
         ParentStudent.objects.create(parent=self.parent_profile, student=self.student_profile)
 
+    def test_student_list_shows_classmates_but_retrieve_stays_self_only(self):
+        # Needed so a student can pick a classmate to start a chat with — full
+        # detail access (CanAccessStudentProfile) is unaffected: still self-only.
+        other_class_user = User.objects.create_user(
+            username="student9", password="Str0ngPass!23", role=User.Role.STUDENT
+        )
+        StudentProfile.objects.create(
+            user=other_class_user, school=self.school, class_room=self.class_b, student_code="S-0009"
+        )
+
+        self.client.force_authenticate(self.student_user)
+        list_response = self.client.get("/api/v1/students/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        ids = [s["id"] for s in list_response.data["results"]]
+        self.assertIn(self.student_profile.id, ids)
+        self.assertIn(self.other_student_profile.id, ids)  # classmate, same class_a
+        self.assertEqual(len(ids), 2)  # other_class_user's profile (class_b) excluded
+
+        detail_response = self.client.get(
+            reverse("students:student-detail", args=[self.other_student_profile.id])
+        )
+        self.assertEqual(detail_response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_student_cannot_view_other_student_profile(self):
         self.client.force_authenticate(self.student_user)
         url = reverse("students:student-detail", args=[self.other_student_profile.id])
