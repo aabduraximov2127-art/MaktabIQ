@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, MessagesSquare, Pencil, Search, Send, Users } from "lucide-react"
+import { ArrowLeft, MessagesSquare, Pencil, School, Search, Send, Users } from "lucide-react"
 import toast from "react-hot-toast"
 import { useFetch } from "../hooks/useFetch"
 import { api, getErrorMessage } from "../lib/api"
@@ -12,7 +12,7 @@ import { Modal } from "../components/ui/Modal"
 import { Skeleton } from "../components/ui/Skeleton"
 import { cn } from "../lib/cn"
 import { formatRelative, fullName } from "../lib/format"
-import type { ChatRoom, Message, Paginated, ParentProfile } from "../types"
+import type { ChatRoom, Message, Paginated, ParentProfile, StudentProfile } from "../types"
 
 const ROOM_TYPE_LABEL: Record<ChatRoom["room_type"], string> = {
   CLASS_GENERAL: "Sinf chati",
@@ -24,14 +24,29 @@ const ROOM_TYPE_LABEL: Record<ChatRoom["room_type"], string> = {
 export default function ChatPage() {
   const user = useAuthStore((s) => s.user)
   const canMessageParent = user?.role === "ADMIN" || user?.role === "SUPERADMIN"
+  const isStudent = user?.role === "STUDENT"
   const { data: rooms, loading, refetch } = useFetch<Paginated<ChatRoom>>("/chat/?page_size=100")
   const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null)
   const [mobileThread, setMobileThread] = useState(false)
   const [newMessageOpen, setNewMessageOpen] = useState(false)
+  const [joiningClassGroup, setJoiningClassGroup] = useState(false)
 
   function openRoom(room: ChatRoom) {
     setActiveRoom(room)
     setMobileThread(true)
+  }
+
+  async function openClassGroup() {
+    setJoiningClassGroup(true)
+    try {
+      const { data: room } = await api.get<ChatRoom>("/chat/class_group/")
+      refetch()
+      openRoom(room)
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    } finally {
+      setJoiningClassGroup(false)
+    }
   }
 
   return (
@@ -39,15 +54,27 @@ export default function ChatPage() {
       <div className={cn("w-full shrink-0 border-r border-ink-100 dark:border-ink-800 sm:w-80", mobileThread && "hidden sm:block")}>
         <div className="flex items-center justify-between border-b border-ink-100 px-4 py-4 dark:border-ink-800">
           <h2 className="font-display text-lg font-bold text-ink-900 dark:text-white">Chat</h2>
-          {canMessageParent && (
-            <button
-              onClick={() => setNewMessageOpen(true)}
-              title="Ota-onaga yozish"
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-brand-600 transition-colors hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
-            >
-              <Pencil className="h-4 w-4" />
-            </button>
-          )}
+          <div className="flex items-center gap-1">
+            {isStudent && (
+              <button
+                onClick={openClassGroup}
+                disabled={joiningClassGroup}
+                title="Sinf chatiga o'tish"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-brand-600 transition-colors hover:bg-brand-50 disabled:opacity-60 dark:text-brand-400 dark:hover:bg-brand-500/10"
+              >
+                <School className="h-4 w-4" />
+              </button>
+            )}
+            {(canMessageParent || isStudent) && (
+              <button
+                onClick={() => setNewMessageOpen(true)}
+                title={isStudent ? "Sinfdoshga yozish" : "Ota-onaga yozish"}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-brand-600 transition-colors hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
         <div className="h-[calc(100%-4rem)] overflow-y-auto">
           {loading ? (
@@ -109,7 +136,107 @@ export default function ChatPage() {
           }}
         />
       )}
+      {isStudent && (
+        <NewClassmateMessageModal
+          open={newMessageOpen}
+          onClose={() => setNewMessageOpen(false)}
+          existingRooms={rooms?.results ?? []}
+          onOpened={(room) => {
+            setNewMessageOpen(false)
+            refetch()
+            openRoom(room)
+          }}
+        />
+      )}
     </div>
+  )
+}
+
+function NewClassmateMessageModal({
+  open,
+  onClose,
+  existingRooms,
+  onOpened,
+}: {
+  open: boolean
+  onClose: () => void
+  existingRooms: ChatRoom[]
+  onOpened: (room: ChatRoom) => void
+}) {
+  const user = useAuthStore((s) => s.user)
+  const [search, setSearch] = useState("")
+  const [startingId, setStartingId] = useState<number | null>(null)
+
+  const { data: me } = useFetch<StudentProfile>(open ? "/students/me/" : null, [open])
+
+  const query = new URLSearchParams({ page_size: "50" })
+  if (me?.class_room) query.set("class_room", String(me.class_room))
+  if (search) query.set("search", search)
+  const { data: classmates, loading } = useFetch<Paginated<StudentProfile>>(
+    open && me?.class_room ? `/students/?${query.toString()}` : null,
+    [open, me?.class_room, search]
+  )
+
+  const others = (classmates?.results ?? []).filter((s) => s.user.id !== user?.id)
+
+  async function startConversation(classmate: StudentProfile) {
+    setStartingId(classmate.id)
+    try {
+      const existing = existingRooms.find(
+        (r) => r.room_type === "PRIVATE" && r.members.length === 2 && r.members.some((m) => m.user === classmate.user.id)
+      )
+      if (existing) {
+        onOpened(existing)
+        return
+      }
+      const { data: room } = await api.post<ChatRoom>("/chat/", {
+        room_type: "PRIVATE",
+        name: fullName(classmate.user),
+      })
+      await api.post(`/chat/${room.id}/add_member/`, { user: classmate.user.id })
+      onOpened(room)
+    } catch (err) {
+      toast.error(getErrorMessage(err))
+    } finally {
+      setStartingId(null)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Sinfdoshga yozish">
+      <div className="space-y-4">
+        <Input
+          icon={<Search className="h-4 w-4" />}
+          placeholder="Sinfdosh ismi bo'yicha qidirish..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          autoFocus
+        />
+        <div className="max-h-80 space-y-1.5 overflow-y-auto">
+          {loading ? (
+            <Skeleton className="h-40 w-full" />
+          ) : others.length === 0 ? (
+            <EmptyState title="Sinfdosh topilmadi" />
+          ) : (
+            others.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => startConversation(s)}
+                disabled={startingId === s.id}
+                className="flex w-full items-center gap-3 rounded-xl border border-ink-100 p-3 text-left transition-colors hover:border-brand-200 hover:bg-brand-50/50 disabled:opacity-60 dark:border-ink-800 dark:hover:border-brand-500/40 dark:hover:bg-brand-500/5"
+              >
+                <Avatar name={fullName(s.user)} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-ink-800 dark:text-ink-100">{fullName(s.user)}</p>
+                  <p className="truncate text-xs text-ink-400">{s.class_room_name ?? ""}</p>
+                </div>
+                {startingId === s.id && <Button size="sm" loading />}
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </Modal>
   )
 }
 
